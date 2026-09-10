@@ -4,8 +4,9 @@ Static analytics dashboard for The RealReal consignment operation. One HTML file
 
 ## Live URL
 
-Set after first deploy:
-- Production: `https://<your-project>.vercel.app`
+- Production: https://trr-dashboard-jonch95-oss-projects.vercel.app
+- Vercel project: `trr-dashboard` (team `jonch95-oss-projects`)
+- Production branch: `claude/blissful-tesla-9ucnfs` — pushes to it auto-deploy in ~20s.
 
 ## Monthly refresh — the one-liner
 
@@ -55,10 +56,24 @@ Or connect the git repo to Vercel via the dashboard (Import Project) — every p
 
 ## Privacy
 
-The dashboard contains real financial numbers embedded in the HTML. Anyone with the URL sees everything. Options:
+The dashboard has real financial numbers embedded directly in `index.html`.
+Two separate surfaces expose them, and they need separate decisions.
 
-- **Free**: rely on the unguessable Vercel URL and don't share it. Do not add the URL to any indexable page.
-- **Pro ($20/mo)**: enable "Deployment Protection" in Vercel project settings → require a Vercel login or password to view.
+**The live site — currently protected.** The Vercel team is on the Pro plan and
+Deployment Protection (Vercel Authentication) is already enabled on this project,
+inherited from the team default. Visiting the URL without a Vercel login on this
+account redirects to SSO, and responses carry `x-robots-tag: noindex`. Nothing
+extra was turned on to achieve this. To change it: Vercel project settings →
+Deployment Protection.
+
+**The GitHub repo — public.** `jonch95-oss/TRRDash` is a public repository, so
+`index.html` and every number in it are readable by anyone who finds the repo,
+regardless of the protection on the Vercel side. Making the repo private closes
+that surface: repo Settings → General → Danger Zone → Change visibility.
+
+The deployment itself is minimal: `.vercelignore` keeps `refresh.py`,
+`requirements.txt`, the `data/` drop zone, and this README out of the deployed
+output, so only `index.html` is served.
 
 ## Layout
 
@@ -67,6 +82,9 @@ trr-dashboard/
 ├── index.html          # the dashboard (static, self-contained)
 ├── refresh.py          # rebuilds index.html from data/*.xlsx
 ├── requirements.txt    # openpyxl
+├── vercel.json         # static-site deploy config (no build step)
+├── .vercelignore       # keeps the pipeline out of the deployment
+├── IDEAS.md            # improvement backlog (UI + process)
 ├── data/               # xlsx exports (gitignored)
 │   ├── inventory.xlsx
 │   └── sales.xlsx
