@@ -101,7 +101,7 @@
   tbody td { padding: 9px 10px; border-bottom: 1px solid var(--rule); color: var(--ink); }
   tbody tr:hover { background: var(--bg); }
   tr.dim td { color: var(--ink-3); }
-  .table-wrap { max-height: 560px; overflow-y: auto; border: 1px solid var(--rule); border-radius: 4px; }
+  .table-wrap { max-height: 560px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
   .table-wrap-tall { max-height: 720px; }
 
   .badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 10px;
@@ -120,7 +120,9 @@
 
   /* Filter bar */
   .filterbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; padding: 16px 20px;
-               background: var(--ink); color: white; border-radius: 4px; margin-bottom: 16px; }
+               background: var(--ink); color: white; border-radius: 4px; margin-bottom: 16px;
+               position: sticky; top: 0; z-index: 20;
+               box-shadow: 0 6px 16px -8px rgba(0,0,0,0.45); }
   .filter-group { display: flex; flex-direction: column; gap: 5px; }
   .filter-group label { font-size: 10px; color: #c8c8c8; text-transform: uppercase;
                         letter-spacing: 0.08em; font-weight: 600; }
@@ -203,6 +205,79 @@
 
   .empty-state { padding: 60px; text-align: center; color: var(--ink-3); font-family: 'Fraunces', serif;
                  font-style: italic; font-size: 16px; }
+
+  /* --- Delta chips (month-over-month, populated only once history exists) --- */
+  .delta { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+           padding: 1px 5px; border-radius: 2px; margin-left: 6px; white-space: nowrap; }
+  .delta.up   { background: #d9e6dd; color: var(--good); }
+  .delta.down { background: #f0d4cd; color: var(--bad); }
+  .delta.flat { background: #eee;    color: var(--ink-3); }
+  .kpi.accent .delta, .kpi.profit .delta { background: rgba(255,255,255,0.18); color: #fff; }
+
+  /* --- Confidence band on profit --- */
+  .band { margin-top: 4px; }
+  .band-track { position: relative; height: 26px; background: var(--bg);
+                border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .band-fill { position: absolute; top: 0; bottom: 0; background: rgba(181,79,44,0.20);
+               border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+  .band-point { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
+  .band-scale { display: flex; justify-content: space-between; font-size: 10px;
+                color: var(--ink-3); font-family: 'JetBrains Mono', monospace; margin-top: 3px; }
+  .conf-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
+                gap: 10px; margin: 14px 0 4px; }
+  .conf-cell { border: 1px solid var(--rule); border-radius: 3px; padding: 10px 12px; background: var(--bg); }
+  .conf-cell .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+                  font-weight: 600; color: var(--ink-3); margin-bottom: 4px; }
+  .conf-cell .v { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 600; }
+  .conf-cell .s { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+
+  /* --- Stale-stock callout --- */
+  .stale-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+                gap: 12px; margin-bottom: 18px; }
+  .stale-fig { background: #fff7e0; border: 1px solid #f5d97e; border-radius: 4px; padding: 14px 16px; }
+  .stale-fig .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+                  font-weight: 600; color: #8a5500; margin-bottom: 6px; }
+  .stale-fig .v { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600; color: var(--ink); }
+  .stale-fig .s { font-size: 11px; color: var(--ink-2); margin-top: 3px; }
+
+  tr.thin td { color: var(--ink-3); background: repeating-linear-gradient(
+      45deg, transparent, transparent 6px, rgba(0,0,0,0.02) 6px, rgba(0,0,0,0.02) 12px); }
+  .thin-flag { font-size: 9px; color: var(--ink-3); font-family: 'JetBrains Mono', monospace;
+               border: 1px solid var(--rule-2); border-radius: 2px; padding: 0 3px; margin-left: 5px; }
+
+  /* --- Phone --- */
+  @media (max-width: 700px) {
+    .container { padding: 20px 16px 48px; }
+    h1 { font-size: 30px; }
+    h1 .sub { font-size: 15px; margin-left: 0; display: block; margin-top: 2px; }
+    .masthead { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .masthead-meta { text-align: left; }
+    .masthead-meta .row { white-space: normal; }
+    .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { white-space: nowrap; padding: 10px 12px; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .kpi { padding: 12px 13px; }
+    .kpi-value { font-size: 18px; }
+    .kpi-label { font-size: 9px; }
+    .kpi-sub { font-size: 11px; }
+    .card { padding: 16px 14px; }
+    .card h2 { font-size: 18px; }
+    .card .desc { font-size: 12.5px; }
+    .chart-box { height: 260px; }
+    .chart-box.tall { height: 300px; }
+    .chart-box.short { height: 220px; }
+    .filterbar { padding: 12px; gap: 10px; }
+    .filter-group { flex: 1 1 100%; }
+    .filter-group select, .filter-group input { min-width: 0; width: 100%; }
+    .filterbar .actions { margin-left: 0; width: 100%; }
+    .filterbar .actions button { flex: 1; }
+    /* Wide tables scroll inside their own box rather than the page */
+    .table-wrap table { min-width: 700px; }
+    #bcg-table, #cadence-table, #brand-table, #cohort-table { min-width: 900px; }
+    .story p, .story .lede { font-size: 14px; }
+  }
 </style>
 </head>
 <body>
@@ -253,6 +328,17 @@
         <p class="desc">Estimated gross profit (commission − cost) per category. Categories with limited cost data are shaded.</p>
         <div class="chart-box"><canvas id="ov-cat-profit"></canvas></div>
       </div>
+    </div>
+
+    <div class="card" id="card-confidence">
+      <h2>How much of that profit is measured?</h2>
+      <p class="desc">Profit is commission minus cost of goods. Only some of the cost is an
+        invoiced figure — the rest is inferred from brand&nbsp;&times;&nbsp;category averages, or
+        from a portfolio-wide average. The headline profit number is only as firm as the share
+        sitting on invoiced cost.</p>
+      <div class="conf-split" id="conf-split"></div>
+      <div class="band" id="profit-band"></div>
+      <p class="footnote" id="conf-footnote"></p>
     </div>
 
     <div class="card">
@@ -358,6 +444,7 @@
     <div class="card">
       <h2>Receive-month cohorts</h2>
       <p class="desc">Each row is items consigned in that month. Reads left-to-right: how that batch matured.</p>
+      <div class="data-quality-note" id="cohort-note" style="display:none"></div>
       <div class="table-wrap"><table id="cohort-table"></table></div>
     </div>
   </section>
@@ -426,10 +513,24 @@
         <div class="chart-box"><canvas id="ch-aging-cost"></canvas></div>
       </div>
     </div>
+
+    <div class="card" id="card-stale">
+      <h2>Capital parked in stale stock</h2>
+      <p class="desc">Everything on consignment for more than a year, grouped by brand and
+        category and ranked by the cost tied up in it. This is the markdown-or-recall list.</p>
+      <div class="stale-head" id="stale-head"></div>
+      <div class="table-wrap"><table id="stale-table"></table></div>
+      <p class="footnote" id="stale-footnote"></p>
+    </div>
   </section>
 
   <!-- ========== MONTHLY TREND ========== -->
   <section class="panel" id="p-monthly">
+    <div class="data-quality-note" id="monthly-note" style="display:none"></div>
+    <div class="toggle-bar" id="month-range">
+      <button class="active" data-since="2022-01">2022 &rarr; today</button>
+      <button data-since="">Full history</button>
+    </div>
     <div class="card">
       <h2>Monthly: received vs sold</h2>
       <p class="desc">Inflow (consigned that month) vs outflow (sold that month). Watch the gap.</p>
@@ -486,6 +587,27 @@ const confidenceBadge = c => {
   return `<span class="badge ${cls}">${lbl}</span>`;
 };
 
+// ---- Month-over-month deltas. Present only once refresh.py has run twice,
+// ---- so every consumer must tolerate their absence.
+const DELTAS = (DATA.deltas && DATA.deltas.metrics) ? DATA.deltas.metrics : null;
+const DELTA_SINCE = DATA.deltas ? DATA.deltas.since : null;
+const fmtPt = v => (v*100).toFixed(1) + 'pt';
+function deltaChip(key, fmt, higherIsBetter = true) {
+  if (!DELTAS || !DELTAS[key]) return '';
+  const c = DELTAS[key].change;
+  if (!isFinite(c)) return '';
+  if (Math.abs(c) < 1e-9) return '<span class="delta flat">no change</span>';
+  const cls = higherIsBetter ? (c > 0 ? 'up' : 'down') : (c > 0 ? 'down' : 'up');
+  return `<span class="delta ${cls}" title="vs the refresh of ${DELTA_SINCE}">${c > 0 ? '+' : '\u2212'}${fmt(Math.abs(c))}</span>`;
+}
+
+// Cost-confidence shares, used in several places below.
+const CMS = DATA.meta.cost_match_summary || {};
+const cmsTotal = CMS.total || DATA.headline.total_items || 0;
+const shareHi  = cmsTotal ? (CMS.high_confidence   || 0) / cmsTotal : 0;
+const shareMed = cmsTotal ? (CMS.medium_confidence || 0) / cmsTotal : 0;
+const shareLo  = cmsTotal ? (CMS.low_confidence    || 0) / cmsTotal : 0;
+
 // Set masthead values
 document.getElementById('meta-today').textContent = DATA.meta.today;
 document.getElementById('meta-total').textContent = (DATA.headline.total_items || DATA.headline.eligible || 0).toLocaleString();
@@ -507,14 +629,14 @@ const chartHandlers = {};
 // ==================== OVERVIEW ====================
 const h = DATA.headline;
 const overviewKpis = [
-  {label:'Total items', value: fmtN(h.total_items), sub:`Across ${DATA.brand_table.length} brands · ${DATA.category_data.length} categories`, cls:'accent'},
-  {label:'Sell-through', value: fmtPct(h.sell_through_overall), sub:`${fmtN(h.sold)} of ${fmtN(h.eligible)} eligible`, cls:''},
-  {label:'Commission earned', value: fmt$(h.commission), sub:`Avg $${(h.avg_commission||0).toFixed(0)}/sold item`, cls:''},
-  {label:'Gross profit', value: fmt$(h.profit), sub:`Commission − COGS · ${fmtPct(h.profit/h.commission)} margin on payouts`, cls:'profit'},
-  {label:'Avg days-to-sell', value: fmtNd(h.avg_dts), sub:`Median ${fmtNd(h.median_dts)} · p75 ${fmtNd(h.p75_dts)} · p90 ${fmtNd(h.p90_dts)}`, cls:''},
-  {label:'On hand today', value: fmtN(h.on_hand), sub:`${fmtN(DATA.on_hand_aging['365+']||0)} items aged >1 year`, cls:'warn'},
-  {label:'Avg sale price', value: fmt$(h.avg_price), sub:`Sold items only`, cls:''},
-  {label:'Return rate', value: fmtPct(h.return_rate), sub:`${fmtN(h.returned)} returned to consignor`, cls:''},
+  {label:'Total items', value: fmtN(h.total_items) + deltaChip('total_items', fmtN), sub:`Across ${DATA.brand_table.length} brands · ${DATA.category_data.length} categories`, cls:'accent'},
+  {label:'Sell-through', value: fmtPct(h.sell_through_overall) + deltaChip('sell_through_overall', fmtPt), sub:`${fmtN(h.sold)} of ${fmtN(h.eligible)} eligible`, cls:''},
+  {label:'Commission earned', value: fmt$(h.commission) + deltaChip('commission', fmt$), sub:`Avg $${(h.avg_commission||0).toFixed(0)}/sold item`, cls:''},
+  {label:'Gross profit', value: fmt$(h.profit) + deltaChip('profit', fmt$), sub:`Commission − COGS · ${fmtPct(h.profit/h.commission)} margin on payouts`, cls:'profit'},
+  {label:'Avg days-to-sell', value: fmtNd(h.avg_dts) + deltaChip('avg_dts', v=>Math.round(v)+'d', false), sub:`Median ${fmtNd(h.median_dts)} · p75 ${fmtNd(h.p75_dts)} · p90 ${fmtNd(h.p90_dts)}`, cls:''},
+  {label:'On hand today', value: fmtN(h.on_hand) + deltaChip('on_hand', fmtN, false), sub:`${fmtN(DATA.on_hand_aging['365+']||0)} items aged >1 year`, cls:'warn'},
+  {label:'Avg sale price', value: fmt$(h.avg_price) + deltaChip('avg_price', fmt$), sub:`Sold items only`, cls:''},
+  {label:'Return rate', value: fmtPct(h.return_rate) + deltaChip('return_rate', fmtPt, false), sub:`${fmtN(h.returned)} returned to consignor`, cls:''},
 ];
 document.getElementById('overview-kpis').innerHTML = overviewKpis.map(k =>
   `<div class="kpi ${k.cls}">
@@ -531,7 +653,10 @@ document.getElementById('story-1').innerHTML = `<b>${fmtN(h.sold)}</b> items sol
 document.getElementById('story-2').innerHTML = `Sell-through is <b>${fmtPct(h.sell_through_overall)}</b>; most items move within <b>${fmtNd(h.median_dts)}</b> (median).`;
 document.getElementById('story-3').innerHTML = `Your top brand by profit is <b>${topBrand.brand}</b> at <b>${fmt$(topBrand.profit)}</b>; top category is <b>${topCat.category}</b> at <b>${fmt$(topCat.total_profit)}</b>.`;
 document.getElementById('story-4').innerHTML = `<b>${fmtN(h.on_hand)}</b> items are currently on consignment with TRR; <b>${fmtN(oldest)}</b> have been sitting more than a year.`;
-document.getElementById('story-5').innerHTML = `Cost data confidence: <b>94%</b> of items have exact or category-average cost from your wholesale invoices.`;
+document.getElementById('story-5').innerHTML = (shareMed + shareLo) > 0.005
+  ? `Cost confidence: <b>${fmtPct0(shareHi)}</b> of items are priced from an invoiced cost; ` +
+    `<b>${fmtPct0(shareMed + shareLo)}</b> rely on an average, so the profit figure above is an estimate.`
+  : `Cost confidence: every item is priced from an invoiced cost, so the profit figure above is measured rather than estimated.`;
 
 chartHandlers['p-overview'] = () => {
   if (window._ovInited) return; window._ovInited = true;
@@ -907,8 +1032,12 @@ chartHandlers['p-cohort'] = () => {
     <th class="num">Sell-thru</th>
     <th class="num">Avg DTS</th>
   </tr></thead><tbody>`;
+  const THIN = 50;   // below this many items a cohort rate is noise, not signal
+  let thinCount = 0;
   c.slice().reverse().forEach(r => {
-    html += `<tr><td>${r.month}</td><td class="num">${r.cohort_age_days}</td>
+    const isThin = (r.received || 0) < THIN;
+    if (isThin) thinCount++;
+    html += `<tr class="${isThin ? 'thin' : ''}"><td>${r.month}${isThin ? '<span class="thin-flag" title="Fewer than '+THIN+' items — rates here are noise">THIN</span>' : ''}</td><td class="num">${r.cohort_age_days}</td>
       <td class="num">${fmtN(r.received)}</td>
       <td class="num">${fmtN(r.sold)}</td>
       <td class="num">${fmtPct(r.p30)}</td>
@@ -921,6 +1050,13 @@ chartHandlers['p-cohort'] = () => {
   });
   html += '</tbody>';
   document.getElementById('cohort-table').innerHTML = html;
+  const note = document.getElementById('cohort-note');
+  if (note && thinCount) {
+    note.style.display = '';
+    note.innerHTML = `<b>${thinCount}</b> of ${c.length} cohorts hold fewer than ${THIN} items and are marked ` +
+      `<span class="thin-flag">THIN</span>. A 100% sell-through on a handful of items is not a result — ` +
+      `read those rows as anecdote, not rate.`;
+  }
 };
 
 // ==================== CATEGORY & GENDER ====================
@@ -1133,11 +1269,19 @@ chartHandlers['p-aging'] = () => {
 };
 
 // ==================== MONTHLY ====================
-chartHandlers['p-monthly'] = () => {
-  if (window._monthInit) return; window._monthInit = true;
-  const mEntries = Object.entries(DATA.monthly || {}).sort((a,b) => a[0].localeCompare(b[0]));
-  const labels = mEntries.map(([k])=>k);
-  new Chart(document.getElementById('ch-monthly'), {
+// Pre-2022 is a small tail of the catalog but spans most of the x-axis, so the
+// default window starts at 2022 and the full history stays one click away.
+let monthlyCharts = [];
+let monthlySince = '2022-01';
+
+function renderMonthly() {
+  const all = Object.entries(DATA.monthly || {}).sort((a,b) => a[0].localeCompare(b[0]));
+  const mEntries = monthlySince ? all.filter(([k]) => k >= monthlySince) : all;
+  const labels = mEntries.map(([k]) => k);
+  monthlyCharts.forEach(c => c.destroy());
+  monthlyCharts = [];
+
+  monthlyCharts.push(new Chart(document.getElementById('ch-monthly'), {
     type:'bar',
     data:{labels, datasets:[
       {label:'Received', data:mEntries.map(([_,v])=>v.received), backgroundColor:'#d4cdc0'},
@@ -1146,8 +1290,8 @@ chartHandlers['p-monthly'] = () => {
     options:{responsive:true, maintainAspectRatio:false,
       plugins:{legend:{labels:{font:{family:'Inter Tight'}}}},
       scales:{y:{ticks:{font:{family:'JetBrains Mono'}}}}}
-  });
-  new Chart(document.getElementById('ch-monthly-profit'), {
+  }));
+  monthlyCharts.push(new Chart(document.getElementById('ch-monthly-profit'), {
     type:'bar',
     data:{labels, datasets:[
       {label:'Commission $', data:mEntries.map(([_,v])=>v.commission||0), backgroundColor:'#2d5e3e'},
@@ -1157,7 +1301,38 @@ chartHandlers['p-monthly'] = () => {
     options:{responsive:true, maintainAspectRatio:false,
       plugins:{legend:{labels:{font:{family:'Inter Tight'}}}},
       scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k', font:{family:'JetBrains Mono'}}}}}
+  }));
+
+  // Reconciliation note: sold items with no sale date never land in a month, so
+  // these charts sum below the headline. Say so rather than let it read as a bug.
+  const note = document.getElementById('monthly-note');
+  const soldInMonths = all.reduce((t,[_,v]) => t + (v.sold||0), 0);
+  const undated = (DATA.sold_undated && DATA.sold_undated.units != null)
+    ? DATA.sold_undated.units
+    : Math.max(0, (h.sold||0) - soldInMonths);
+  const hidden = monthlySince ? all.filter(([k]) => k < monthlySince).reduce((t,[_,v]) => t + (v.received||0), 0) : 0;
+  const parts = [];
+  if (hidden) parts.push(`<b>${fmtN(hidden)}</b> items received before ${monthlySince} are outside this window (${fmtPct(hidden/(h.total_items||1))} of the catalog) — switch to full history to include them.`);
+  if (undated) {
+    const comm = DATA.sold_undated ? ` (${fmt$(DATA.sold_undated.commission)} in commission)` : '';
+    parts.push(`<b>${fmtN(undated)}</b> sold items carry no sale date${comm}, so they cannot appear in any month. These charts will always total slightly below the headline figures.`);
+  }
+  note.style.display = parts.length ? '' : 'none';
+  note.innerHTML = parts.join(' ');
+}
+
+document.querySelectorAll('#month-range button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#month-range button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    monthlySince = btn.dataset.since;
+    renderMonthly();
   });
+});
+
+chartHandlers['p-monthly'] = () => {
+  if (window._monthInit) return; window._monthInit = true;
+  renderMonthly();
 };
 
 // ==================== STORY ====================
@@ -1175,9 +1350,200 @@ document.getElementById('story-losemoney').innerHTML = lossBrands.length === 0 ?
   `Brands currently below cost: ${lossBrands.map(b=>`<b>${b.brand}</b> (${fmt$(b.profit)})`).join(', ')}. These are typically brands where wholesale cost ran high vs realized resale value — worth a closer look at COGS data quality and pricing strategy.`;
 document.getElementById('story-stuck').innerHTML =
   `Brands with at least 50 items received but under 40% sell-through: ${slow.length ? slow.map(b=>`<b>${b.brand}</b> (${fmtPct(b.sell_through)}, ${fmtN(b.received)} received)`).join(', ') : 'none'}. ${fmtN(DATA.on_hand_aging['365+']||0)} items have been on consignment more than a year — candidates for price drops or recall.`;
-document.getElementById('story-newdata').innerHTML =
-  `This export (${DATA.meta.today}) reflects all sales recorded since the last sync. The dashboard now joins your TRR consignment data against your wholesale invoice file by SKU and brand×category, so for the first time, profit dollars are anchored to real cost — not a portfolio average.`;
-document.getElementById('story-caveats').innerHTML = `Cost confidence breakdown: <b>31%</b> of items have exact cost (SKU-matched to wholesale invoice), <b>63%</b> use a brand × category average from your wholesale data, and <b>6%</b> fall back to a portfolio cost. Where you see a <span class="badge lo">LOW</span> badge, treat profit as directional rather than exact. Gender is inferred from item descriptions; many items are tagged "Unspecified" because the description doesn't disambiguate — these are most often womens apparel given the catalog mix.`;
+document.getElementById('story-newdata').innerHTML = (() => {
+  if (!DELTAS) {
+    return `This is the first refresh on record, so there is nothing to compare against yet. ` +
+           `From the next run onward this section reports what actually moved between exports, ` +
+           `and the headline figures above carry change indicators.`;
+  }
+  const g = k => DELTAS[k] ? DELTAS[k].change : null;
+  const bits = [];
+  if (g('total_items') != null) bits.push(`<b>${fmtN(Math.abs(g('total_items')))}</b> items were ${g('total_items') >= 0 ? 'added to' : 'removed from'} the book`);
+  if (g('sold') != null) bits.push(`<b>${fmtN(Math.abs(g('sold')))}</b> more items sold`);
+  if (g('commission') != null) bits.push(`commission moved <b>${g('commission') >= 0 ? '+' : '\u2212'}${fmt$(Math.abs(g('commission')))}</b>`);
+  if (g('profit') != null) bits.push(`gross profit moved <b>${g('profit') >= 0 ? '+' : '\u2212'}${fmt$(Math.abs(g('profit')))}</b>`);
+  const st = g('sell_through_overall');
+  const stTxt = st == null ? '' : ` Sell-through ${st >= 0 ? 'rose' : 'fell'} <b>${fmtPt(Math.abs(st))}</b> to <b>${fmtPct(h.sell_through_overall)}</b>.`;
+  return `Since the refresh of <b>${DELTA_SINCE}</b>: ${bits.join(', ')}.${stTxt}`;
+})();
+document.getElementById('story-caveats').innerHTML = `Cost confidence breakdown: <b>${fmtPct0(shareHi)}</b> of items have exact cost (SKU-matched to wholesale invoice), <b>${fmtPct0(shareMed)}</b> use a brand × category average from your wholesale data, and <b>${fmtPct0(shareLo)}</b> fall back to a portfolio cost. Where you see a <span class="badge lo">LOW</span> badge, treat profit as directional rather than exact. Gender is inferred from item descriptions; many items are tagged "Unspecified" because the description doesn't disambiguate — these are most often womens apparel given the catalog mix.`;
+
+// ==================== PROFIT CONFIDENCE ====================
+// The headline profit number blends invoiced cost with two grades of estimate.
+// This panel says how much of it is actually measured, and how far it can move
+// if the estimated half is wrong.
+(function renderConfidence() {
+  const pbc = DATA.profit_by_confidence || null;
+  const cogs = h.cogs_sold || 0;
+
+  // Prefer exact per-confidence figures; fall back to apportioning by item share.
+  let estCogs, hiProfit, hiUnits;
+  if (pbc) {
+    estCogs = ['MEDIUM','LOW','UNVERIFIED'].reduce((t,k) => t + ((pbc[k] && pbc[k].cogs) || 0), 0);
+    hiProfit = (pbc.HIGH && pbc.HIGH.profit) || 0;
+    hiUnits  = (pbc.HIGH && pbc.HIGH.units)  || 0;
+  } else {
+    estCogs = cogs * (shareMed + shareLo);
+    hiProfit = null;
+    hiUnits = CMS.high_confidence || 0;
+  }
+
+  const cells = [
+    {l:'Invoiced cost', share: shareHi,  n: CMS.high_confidence,
+     s:'Exact SKU match to a wholesale invoice', cls:'var(--hi)'},
+    {l:'Brand × category average', share: shareMed, n: CMS.medium_confidence,
+     s:'Cost inferred from similar items you bought', cls:'var(--med)'},
+    {l:'Portfolio average', share: shareLo, n: CMS.low_confidence,
+     s:'No brand-level cost data — weakest basis', cls:'var(--lo)'},
+  ];
+  document.getElementById('conf-split').innerHTML = cells.map(c =>
+    `<div class="conf-cell">
+       <div class="l">${c.l}</div>
+       <div class="v" style="color:${c.cls}">${fmtPct0(c.share)}</div>
+       <div class="s">${fmtN(c.n)} items · ${c.s}</div>
+     </div>`).join('');
+
+  const profit = h.profit || 0;
+  const scenarios = [0.05, 0.10, 0.20].map(pct => ({
+    pct, swing: estCogs * pct, lo: profit - estCogs * pct, hi: profit + estCogs * pct
+  }));
+  const mid = scenarios[1];                       // the +/-10% case drives the bar
+  const axisLo = Math.min(0, mid.lo), axisHi = Math.max(mid.hi, profit);
+  const span = (axisHi - axisLo) || 1;
+  const pos = v => ((v - axisLo) / span) * 100;
+
+  document.getElementById('profit-band').innerHTML =
+    `<div style="font-size:12px;color:var(--ink-2);margin-bottom:6px;">
+       If the estimated costs are off by &plusmn;10%, gross profit lands anywhere in this range:
+     </div>
+     <div class="band-track">
+       <div class="band-fill" style="left:${pos(mid.lo)}%; width:${pos(mid.hi)-pos(mid.lo)}%"></div>
+       <div class="band-point" style="left:${pos(profit)}%" title="Reported: ${fmt$(profit)}"></div>
+     </div>
+     <div class="band-scale"><span>${fmt$(mid.lo)}</span>
+       <span style="color:var(--ink)">reported ${fmt$(profit)}</span>
+       <span>${fmt$(mid.hi)}</span></div>`;
+
+  const pctOfProfit = profit ? (mid.swing / Math.abs(profit)) : 0;
+  const estItems = (CMS.medium_confidence||0) + (CMS.low_confidence||0);
+  const band = document.getElementById('profit-band');
+  if (estCogs <= 0 || estItems === 0) {
+    band.innerHTML = `<div style="font-size:12px;color:var(--ink-2);">Every sold item is costed from an invoice, so there is no estimation band on this figure.</div>`;
+    document.getElementById('conf-footnote').innerHTML =
+      `All ${fmtN(cmsTotal)} items carry an invoiced cost. Gross profit of <b>${fmt$(profit)}</b> is measured, not estimated.`;
+    return;
+  }
+  document.getElementById('conf-footnote').innerHTML =
+    `${fmtPct0(shareMed + shareLo)} of items (${fmtN(estItems)}) price their cost from an average rather than an invoice, ` +
+    `covering ${fmt$(estCogs)} of the ${fmt$(cogs)} total COGS. ` +
+    `A 10% error there moves profit by ${fmt$(mid.swing)} — ${fmtPct0(pctOfProfit)} of the reported figure. ` +
+    scenarios.map(x => `&plusmn;${(x.pct*100).toFixed(0)}%: ${fmt$(x.lo)}&nbsp;–&nbsp;${fmt$(x.hi)}`).join(' · ') + '. ' +
+    (hiProfit !== null
+      ? `Restricted to the ${fmtN(hiUnits)} items with invoiced cost, profit is <b>${fmt$(hiProfit)}</b> — that part is measured, not estimated.`
+      : `Re-run <code>refresh.py</code> to add the invoiced-cost-only profit figure to this panel.`);
+})();
+
+// ==================== STALE STOCK WORKLIST ====================
+chartHandlers['p-aging-stale'] = null;   // rendered eagerly with the aging panel
+(function renderStale() {
+  const ag = DATA.on_hand_aging || {}, agc = DATA.on_hand_aging_cost || {}, agv = DATA.on_hand_aging_value || {};
+  const units = ag['365+'] || 0, cost = agc['365+'] || 0, retail = agv['365+'] || 0;
+  const over180 = (ag['181-365'] || 0) + units;
+  const cost180 = (agc['181-365'] || 0) + cost;
+
+  document.getElementById('stale-head').innerHTML = [
+    {l:'Units over 1 year', v: fmtN(units), s: `${fmtPct0(h.on_hand ? units/h.on_hand : 0)} of everything on hand`},
+    {l:'Your cost, tied up', v: fmt$(cost), s: 'Capital you cannot redeploy'},
+    {l:'Retail value', v: fmt$(retail), s: 'What it is still listed at'},
+    {l:'Units over 180 days', v: fmtN(over180), s: `${fmtPct0(h.on_hand ? over180/h.on_hand : 0)} of on-hand · ${fmt$(cost180)} at cost`},
+  ].map(f => `<div class="stale-fig"><div class="l">${f.l}</div><div class="v">${f.v}</div><div class="s">${f.s}</div></div>`).join('');
+
+  const rows = DATA.stale_breakdown || null;
+  const tbl = document.getElementById('stale-table');
+  const foot = document.getElementById('stale-footnote');
+  if (!rows) {
+    tbl.innerHTML = '';
+    tbl.parentElement.innerHTML = '<div class="empty-state">Re-run refresh.py to break this down by brand and category.</div>';
+    foot.textContent = 'The totals above come from the aging buckets already in this export.';
+    return;
+  }
+  tbl.innerHTML = '<thead><tr><th>Brand</th><th>Category</th><th class="num">Units</th>' +
+    '<th class="num">Avg age</th><th class="num">Your cost</th><th class="num">Retail</th></tr></thead><tbody>' +
+    rows.map(r => `<tr><td>${r.brand}</td><td>${r.category}</td>
+      <td class="num">${fmtN(r.units)}</td>
+      <td class="num">${fmtNd(r.avg_age_days)}</td>
+      <td class="num">${fmt$(r.cost)}</td>
+      <td class="num">${fmt$(r.retail)}</td></tr>`).join('') + '</tbody>';
+  const top = rows.slice(0, 3);
+  foot.innerHTML = rows.length
+    ? `${rows.length} brand × category groups. The heaviest are ` +
+      top.map(r => `<b>${r.brand} ${r.category}</b> (${fmtN(r.units)} units, ${fmt$(r.cost)})`).join(', ') +
+      `. Sorted by capital tied up, so work it top-down.`
+    : 'Nothing on hand has passed a year.';
+})();
+
+// ==================== DEEP LINKING ====================
+// The active tab and the brand/category filters live in the URL, so a view can
+// be bookmarked or reopened directly. This also drives the initial render —
+// without it the Overview charts never got built on first load.
+const PANEL_IDS = [...document.querySelectorAll('.panel')].map(p => p.id);
+
+function writeHash() {
+  const active = document.querySelector('.panel.active');
+  if (!active) return;
+  const params = new URLSearchParams();
+  if (active.id === 'p-bcg') {
+    const v = id => document.getElementById(id).value;
+    if (v('f-brand'))  params.set('brand',  v('f-brand'));
+    if (v('f-cat'))    params.set('cat',    v('f-cat'));
+    if (v('f-gender')) params.set('gender', v('f-gender'));
+    if (v('f-search')) params.set('q',      v('f-search'));
+  }
+  const q = params.toString();
+  const next = '#' + active.id + (q ? '?' + q : '');
+  if (location.hash !== next) history.replaceState(null, '', next);
+}
+
+function activatePanel(id, {updateHash = true} = {}) {
+  if (!PANEL_IDS.includes(id)) id = PANEL_IDS[0];
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  const tab = document.querySelector(`.tab[data-panel="${id}"]`);
+  if (tab) tab.classList.add('active');
+  document.getElementById(id).classList.add('active');
+  if (chartHandlers[id]) setTimeout(() => chartHandlers[id](), 30);
+  if (updateHash) writeHash();
+}
+
+// Replace the original tab handler (it neither deep-linked nor ran on load).
+document.querySelectorAll('.tab').forEach(t => {
+  const fresh = t.cloneNode(true);
+  t.parentNode.replaceChild(fresh, t);
+});
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => activatePanel(t.dataset.panel));
+});
+['f-brand','f-cat','f-gender'].forEach(id => document.getElementById(id).addEventListener('change', writeHash));
+document.getElementById('f-search').addEventListener('input', writeHash);
+document.getElementById('btn-reset').addEventListener('click', writeHash);
+
+(function restoreFromHash() {
+  const raw = location.hash.replace(/^#/, '');
+  const [panel, query] = raw.split('?');
+  if (query) {
+    const params = new URLSearchParams(query);
+    const set = (id, key) => { const v = params.get(key); if (v != null) document.getElementById(id).value = v; };
+    set('f-brand','brand'); set('f-cat','cat'); set('f-gender','gender'); set('f-search','q');
+    applyBcgFilters();
+  }
+  activatePanel(panel || PANEL_IDS[0], {updateHash: false});
+})();
+
+window.addEventListener('hashchange', () => {
+  const panel = location.hash.replace(/^#/, '').split('?')[0];
+  const active = document.querySelector('.panel.active');
+  if (panel && active && panel !== active.id) activatePanel(panel, {updateHash: false});
+});
 </script>
 </body>
 </html>

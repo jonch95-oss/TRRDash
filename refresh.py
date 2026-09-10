@@ -21,6 +21,20 @@ ROOT = Path(__file__).parent
 INVENTORY = ROOT / 'data' / 'inventory.xlsx'
 SALES = ROOT / 'data' / 'sales.xlsx'
 INDEX = ROOT / 'index.html'
+HISTORY = ROOT / 'history.json'
+SCHEMA = ROOT / 'schema.json'
+
+# --dry-run : compute and print, never touch index.html
+# --force   : write even if the sanity gate objects
+DRY_RUN = '--dry-run' in sys.argv
+FORCE = '--force' in sys.argv
+for _a in sys.argv[1:]:
+    if _a not in ('--dry-run', '--force'):
+        sys.exit(f"ERROR: unknown argument {_a!r}. Valid flags: --dry-run, --force")
+
+# Guard thresholds: a new export should not move the book this much in one month.
+MAX_ITEM_DROP = 0.20      # items falling >20% vs the last run
+MAX_REVENUE_SWING = 0.30  # revenue moving >30% in either direction
 
 if not INVENTORY.exists():
     sys.exit(f"ERROR: {INVENTORY} not found. Place your TRR inventory export there.")
@@ -31,6 +45,69 @@ if not INDEX.exists():
 
 # Use today's date as the export anchor; adjust if the export file has a different cut date
 TODAY = date.today()
+
+# ============================================================
+# SCHEMA GUARD
+# ============================================================
+# Both parsers below address columns POSITIONALLY (r[7], r[19], r[25], r[28] for
+# the invoice; an 11-column unpack for the inventory). If an upstream export
+# inserts or reorders a column, the failure mode is not a crash — it is a silent
+# mis-parse that produces plausible-looking wrong numbers. So: fingerprint the
+# header row on the first run, and refuse to proceed if it ever changes.
+
+def _norm_header(row):
+    return [(str(c).strip() if c is not None else '') for c in row]
+
+def check_schema(name, header, required_len, numeric_probes, sample_rows):
+    """Validate one sheet's layout. Fails loudly rather than mis-parsing."""
+    hdr = _norm_header(header or [])
+    if len(hdr) < required_len:
+        sys.exit(
+            f"ERROR: {name} has {len(hdr)} columns; this parser needs at least "
+            f"{required_len}. The export layout has changed — see the column "
+            f"indices at the top of refresh.py before re-running."
+        )
+    # Structural probe: columns the parser reads as numbers should actually be numbers.
+    for idx, label in numeric_probes:
+        vals = [r[idx] for r in sample_rows if len(r) > idx and r[idx] is not None]
+        if not vals:
+            continue
+        numeric = sum(1 for v in vals if isinstance(v, (int, float)))
+        if numeric / len(vals) < 0.8:
+            sys.exit(
+                f"ERROR: {name} column {idx} (expected: {label}) is only "
+                f"{numeric/len(vals):.0%} numeric across {len(vals)} sampled rows. "
+                f"The export layout has probably shifted; refusing to write "
+                f"numbers that would be wrong."
+            )
+    # Header fingerprint: compare against what we saw the first time.
+    store = {}
+    if SCHEMA.exists():
+        try: store = json.loads(SCHEMA.read_text())
+        except (json.JSONDecodeError, OSError): store = {}
+    prev = store.get(name)
+    if prev is None:
+        store[name] = hdr
+        if DRY_RUN:
+            print(f"  schema fingerprint for {name} would be recorded ({len(hdr)} columns)")
+        else:
+            SCHEMA.write_text(json.dumps(store, indent=2))
+            print(f"  schema fingerprint recorded for {name} ({len(hdr)} columns)")
+    elif prev != hdr:
+        diff = [
+            f"    col {i}: {prev[i] if i < len(prev) else '<missing>'!r} -> {hdr[i] if i < len(hdr) else '<missing>'!r}"
+            for i in range(max(len(prev), len(hdr)))
+            if (prev[i] if i < len(prev) else None) != (hdr[i] if i < len(hdr) else None)
+        ]
+        sys.exit(
+            f"ERROR: {name} header no longer matches the recorded layout.\n"
+            + "\n".join(diff[:15])
+            + f"\n\n  {len(diff)} column(s) differ. The positional indices in refresh.py "
+              f"are probably now wrong.\n  Fix the indices, then delete {SCHEMA.name} "
+              f"to re-record the layout."
+        )
+    else:
+        print(f"  schema OK for {name}")
 
 SOLD_STATUSES = {'sold', 'commission_paid', 'shipped', 'checked_out'}
 REMOVED_STATUSES = {'consigner_returned', 'rejected'}
@@ -52,14 +129,20 @@ print(f"Loading wholesale invoice: {SALES}")
 wb = openpyxl.load_workbook(SALES, read_only=True, data_only=True)
 ws = wb.active
 wh_rows = []
+wh_header, wh_sample = None, []
 for i, r in enumerate(ws.iter_rows(values_only=True)):
-    if i == 0: continue
+    if i == 0:
+        wh_header = r
+        continue
+    if len(wh_sample) < 200: wh_sample.append(r)
     if not r[7]: continue
     wh_rows.append({
         'brand': r[7], 'category': r[5], 'gender': r[8],
         'style': str(r[19]).strip() if r[19] else None,
         'units': r[25] or 0, 'std_cost': r[28] or 0,
     })
+check_schema('wholesale invoice', wh_header, 29,
+             [(25, 'units'), (28, 'std_cost')], wh_sample)
 print(f"  {len(wh_rows):,} wholesale rows")
 
 BRAND_FIXES = {
@@ -251,8 +334,12 @@ wb = openpyxl.load_workbook(INVENTORY, read_only=True, data_only=True)
 ws = wb.active
 items = []
 cost_conf_stats = Counter()
+inv_header, inv_sample = None, []
 for i, r in enumerate(ws.iter_rows(values_only=True)):
-    if i < 2: continue
+    if i < 2:
+        if i == 1: inv_header = r
+        continue
+    if len(inv_sample) < 200: inv_sample.append(r)
     sku, vsku, name, price, status, image, description, comm_rate, comm_amount, recv, sale = r
     if not name or not status: continue
     rd, sd = parse_date(recv), parse_date(sale)
@@ -313,6 +400,8 @@ for i, r in enumerate(ws.iter_rows(values_only=True)):
         'comm_rate':comm_rate,'comm_amount':comm_amount,'received':rd,'sale_date':sd,
         'fine_cat':fine_cat,'gender':gender,'cost':cost,'cost_conf':cost_conf,
     })
+check_schema('inventory export', inv_header, 11,
+             [(3, 'price'), (7, 'commission rate'), (8, 'commission amount')], inv_sample)
 print(f"  {len(items):,} items processed")
 
 # ============================================================
@@ -637,6 +726,51 @@ for key, mdict in combo_trends_raw.items():
     if sum(v['received'] for v in mdict.values()) < 20: continue
     combo_trends[key] = [{'month':m, **v} for m, v in sorted(mdict.items())]
 
+# ============================================================
+# DATA-QUALITY + DECISION AGGREGATES
+# ============================================================
+# Sold items carrying no parsed sale date. They are counted in every headline
+# total but cannot land in a month bucket, so the monthly charts will always
+# sum slightly below the headline. Surfacing the gap stops it reading as a bug.
+undated = [i for i in items if is_sold(i) and not i['sale_date']]
+sold_undated = {
+    'units': len(undated),
+    'commission': sum(i['comm_amount'] for i in undated),
+    'revenue': sum(i['price'] for i in undated),
+}
+
+# Profit split by how the cost was established. HIGH is invoiced cost; the rest
+# are estimates of decreasing specificity. The blended profit figure is only as
+# solid as the share of it sitting in HIGH.
+profit_by_confidence = {}
+for conf in ('HIGH', 'MEDIUM', 'LOW', 'UNVERIFIED'):
+    sel = [i for i in items if is_sold(i) and i['cost_conf'] == conf]
+    comm = sum(i['comm_amount'] for i in sel)
+    cogs = sum(i['cost'] for i in sel if i['cost'] is not None)
+    profit_by_confidence[conf] = {
+        'units': len(sel), 'commission': comm, 'cogs': cogs,
+        'profit': comm - cogs,
+    }
+
+# On-hand stock past a year, grouped so it can be worked as a list rather than
+# read as a bar. Sorted by capital tied up.
+stale = defaultdict(lambda: {'units': 0, 'cost': 0.0, 'retail': 0.0, 'age_sum': 0})
+for i in items:
+    if i['status'] not in ON_HAND_STATUSES or not i['received']: continue
+    age = (TODAY - i['received']).days
+    if age <= 365: continue
+    e = stale[(i['brand'], i['fine_cat'])]
+    e['units'] += 1
+    e['retail'] += i['price']
+    e['age_sum'] += age
+    if i['cost'] is not None: e['cost'] += i['cost']
+stale_breakdown = sorted(
+    ({'brand': b, 'category': c, 'units': v['units'], 'cost': v['cost'],
+      'retail': v['retail'], 'avg_age_days': round(v['age_sum'] / v['units'])}
+     for (b, c), v in stale.items()),
+    key=lambda r: -r['cost'],
+)
+
 DATA = {
     'meta': {
         'today': TODAY.strftime('%Y-%m-%d'),
@@ -678,7 +812,80 @@ DATA = {
     'monthly':dict(monthly),
     'brand_cat_gender':brand_cat_gender,
     'combo_trends':combo_trends,
+    'sold_undated':sold_undated,
+    'profit_by_confidence':profit_by_confidence,
+    'stale_breakdown':stale_breakdown,
 }
+
+# ============================================================
+# HISTORY, DELTAS, AND THE SANITY GATE
+# ============================================================
+# refresh.py overwrites index.html in place and the result is pushed straight to
+# a live site. A truncated or partial export would republish wrong numbers with
+# no signal that anything went wrong, so compare against the previous run first.
+
+def load_history():
+    if not HISTORY.exists(): return []
+    try:
+        h = json.loads(HISTORY.read_text())
+        return h if isinstance(h, list) else []
+    except (json.JSONDecodeError, OSError):
+        print(f"WARNING: {HISTORY.name} is unreadable; treating this as the first run.")
+        return []
+
+history = load_history()
+prev = history[-1] if history else None
+
+snapshot = {
+    'date': TODAY.strftime('%Y-%m-%d'),
+    'headline': dict(DATA['headline']),
+    'cost_match_summary': dict(DATA['meta']['cost_match_summary']),
+}
+
+# Deltas vs the previous refresh, for the dashboard to render.
+if prev:
+    ph = prev.get('headline', {})
+    deltas = {'since': prev.get('date'), 'metrics': {}}
+    for k, v in DATA['headline'].items():
+        pv = ph.get(k)
+        if isinstance(v, (int, float)) and isinstance(pv, (int, float)):
+            deltas['metrics'][k] = {'prev': pv, 'change': v - pv}
+    DATA['deltas'] = deltas
+else:
+    DATA['deltas'] = None
+
+# The gate itself.
+gate_problems = []
+if prev:
+    ph = prev.get('headline', {})
+    pi, pr = ph.get('total_items'), ph.get('revenue')
+    if isinstance(pi, (int, float)) and pi > 0:
+        drop = (pi - total_items) / pi
+        if drop > MAX_ITEM_DROP:
+            gate_problems.append(
+                f"item count fell {drop:.1%} ({pi:,.0f} -> {total_items:,}), "
+                f"limit is {MAX_ITEM_DROP:.0%}"
+            )
+    if isinstance(pr, (int, float)) and pr > 0:
+        swing = abs(total_revenue - pr) / pr
+        if swing > MAX_REVENUE_SWING:
+            gate_problems.append(
+                f"revenue moved {swing:.1%} (${pr:,.0f} -> ${total_revenue:,.0f}), "
+                f"limit is {MAX_REVENUE_SWING:.0%}"
+            )
+
+if gate_problems:
+    print()
+    print("=" * 60)
+    print("SANITY GATE: this export looks wrong")
+    print("=" * 60)
+    for p_ in gate_problems:
+        print(f"  - {p_}")
+    print(f"\n  Compared against the run of {prev.get('date')}.")
+    print("  A partial or truncated export is the usual cause. Check the file.")
+    if not FORCE:
+        sys.exit("\nRefusing to overwrite index.html. Re-run with --force if the numbers are correct.")
+    print("\n  --force given; writing anyway.")
 
 # ============================================================
 # SWAP DATA BLOB INTO index.html
@@ -693,6 +900,9 @@ new_html = re.sub(
     lambda m: 'const DATA = ' + data_str + ';</script>',
     html, count=1, flags=re.DOTALL
 )
+if new_html == html:
+    sys.exit("ERROR: could not find the `const DATA = {...};</script>` block in index.html. "
+             "Nothing was written.")
 
 # Refresh cost-match badge in the masthead
 cm = DATA['meta']['cost_match_summary']
@@ -711,17 +921,46 @@ new_html = re.sub(
     new_html, count=1
 )
 
+def summary():
+    print()
+    print("=" * 60)
+    print(f"Items: {total_items:,}")
+    print(f"Sold: {total_sold:,}   Sell-through: {sell_through_overall:.1%}")
+    print(f"Commission: ${total_commission:,.0f}   Profit: ${total_profit:,.0f}")
+    print(f"Median DTS: {median_dts}d   On hand: {total_on_hand:,}")
+    print(f"Cost confidence: HI={cost_conf_stats['HIGH']:,} MED={cost_conf_stats['MEDIUM']:,} "
+          f"LOW={cost_conf_stats['LOW']:,} UNV={cost_conf_stats['UNVERIFIED']:,}")
+    hi = profit_by_confidence['HIGH']
+    print(f"Profit on invoiced cost only: ${hi['profit']:,.0f} across {hi['units']:,} units "
+          f"({hi['profit']/total_profit:.0%} of blended profit)" if total_profit else "")
+    if sold_undated['units']:
+        print(f"Sold items with no sale date: {sold_undated['units']:,} "
+              f"(${sold_undated['commission']:,.0f} commission) — excluded from monthly views")
+    if DATA['deltas']:
+        d = DATA['deltas']['metrics']
+        since = DATA['deltas']['since']
+        def ch(k, f):
+            if k not in d: return 'n/a'
+            return f(d[k]['change'])
+        print(f"Since {since}:  items {ch('total_items', lambda v: f'{v:+,.0f}')}   "
+              f"sold {ch('sold', lambda v: f'{v:+,.0f}')}   "
+              f"profit {ch('profit', lambda v: f'${v:+,.0f}')}")
+
+if DRY_RUN:
+    summary()
+    print()
+    print("--dry-run: index.html was NOT modified.")
+    sys.exit(0)
+
 with open(INDEX, 'w') as f:
     f.write(new_html)
+
+history.append(snapshot)
+HISTORY.write_text(json.dumps(history[-60:], indent=2))
 
 print()
 print("=" * 60)
 print(f"index.html refreshed: {INDEX.stat().st_size:,} bytes")
-print("=" * 60)
-print(f"Items: {total_items:,}")
-print(f"Sold: {total_sold:,}   Sell-through: {sell_through_overall:.1%}")
-print(f"Commission: ${total_commission:,.0f}   Profit: ${total_profit:,.0f}")
-print(f"Median DTS: {median_dts}d   On hand: {total_on_hand:,}")
-print(f"Cost confidence: HI={cost_conf_stats['HIGH']:,} MED={cost_conf_stats['MEDIUM']:,} LOW={cost_conf_stats['LOW']:,} UNV={cost_conf_stats['UNVERIFIED']:,}")
+summary()
 print()
-print("Next: git add index.html && git commit && git push")
+print("Next: git add index.html history.json && git commit && git push")

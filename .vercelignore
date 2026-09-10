@@ -8,3 +8,8 @@ README.md
 .venv/
 venv/
 __pycache__/
+tests/
+.github/
+IDEAS.md
+history.json
+schema.json

@@ -15,11 +15,31 @@ Every month when the new TRR export lands:
 ```bash
 cp ~/Downloads/<new_inventory>.xlsx data/inventory.xlsx
 python refresh.py
-git add index.html && git commit -m "refresh $(date +%F)" && git push
+git add index.html history.json && git commit -m "refresh $(date +%F)" && git push
 ```
 
 Only replace `data/sales.xlsx` when a new Icon wholesale invoice has shipped.
 The xlsx files are gitignored — only the rebuilt `index.html` is pushed.
+
+To see the numbers before committing to them, add `--dry-run`: it prints the
+same summary and leaves `index.html` untouched.
+
+### If the refresh refuses to run
+
+`refresh.py` will stop rather than publish numbers it does not trust:
+
+- **"SANITY GATE: this export looks wrong"** — item count fell more than 20%, or
+  revenue moved more than 30%, against the previous run. A partial or truncated
+  download is the usual cause. Check the export; if the numbers really are
+  correct, re-run with `--force`.
+- **"header no longer matches the recorded layout"** — a column moved in one of
+  the exports. Both parsers read columns by position, so this would otherwise
+  produce plausible-looking wrong numbers. Fix the indices at the top of
+  `refresh.py`, then delete `schema.json` to re-record the layout.
+
+`history.json` holds one small snapshot per refresh and drives the
+month-over-month deltas on the dashboard — commit it along with `index.html`.
+`schema.json` records the expected column layout of both exports.
 
 ## Refreshing with a new TRR export
 
@@ -82,6 +102,9 @@ trr-dashboard/
 ├── index.html          # the dashboard (static, self-contained)
 ├── refresh.py          # rebuilds index.html from data/*.xlsx
 ├── requirements.txt    # openpyxl
+├── history.json        # one snapshot per refresh — drives the deltas
+├── schema.json         # recorded column layout of both exports
+├── tests/              # fixture generator + pipeline smoke test
 ├── vercel.json         # static-site deploy config (no build step)
 ├── .vercelignore       # keeps the pipeline out of the deployment
 ├── IDEAS.md            # improvement backlog (UI + process)
