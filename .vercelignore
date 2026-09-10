@@ -1,0 +1,10 @@
+# Only index.html needs to be served. Keep the refresh pipeline out of the
+# deployment: it stops Vercel auto-detecting this as a Python project, and
+# keeps the script and its inputs off the public site.
+refresh.py
+requirements.txt
+data/
+README.md
+.venv/
+venv/
+__pycache__/
