@@ -706,7 +706,7 @@ new_html = re.sub(
 )
 # Refresh the "refreshed" caption
 new_html = re.sub(
-    r'refreshed [^<]*</div>',
+    r'refreshed\s[^<]*</div>',
     f'refreshed {TODAY.strftime("%b %-d, %Y")}</div>',
     new_html, count=1
 )
