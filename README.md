@@ -24,6 +24,18 @@ The xlsx files are gitignored — only the rebuilt `index.html` is pushed.
 To see the numbers before committing to them, add `--dry-run`: it prints the
 same summary and leaves `index.html` untouched.
 
+### Or just double-click `refresh.command`
+
+In Finder, double-click `refresh.command`. It finds the newest
+`*Inventory*Export*.xlsx` in `~/Downloads`, shows you the numbers first, asks
+before publishing, then rebuilds, commits and pushes. No terminal, and nothing
+leaves the machine except the finished `index.html`.
+
+It needs `data/sales.xlsx` to already be in place — the Icon wholesale invoice
+is the source of *all* brand and cost data, not just cost. Without it only
+about 84 of your 205 brands are recognised and no item gets a cost, so the
+refresh is not worth running.
+
 ### If the refresh refuses to run
 
 `refresh.py` will stop rather than publish numbers it does not trust:
