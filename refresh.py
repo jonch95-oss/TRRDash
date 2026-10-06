@@ -16,6 +16,7 @@ import openpyxl, json, re, os, sys, statistics
 from datetime import datetime, date
 from collections import defaultdict, Counter
 from pathlib import Path
+from iconside import build_icon_vs_trr
 
 ROOT = Path(__file__).parent
 INVENTORY = ROOT / 'data' / 'inventory.xlsx'
@@ -136,11 +137,19 @@ for i, r in enumerate(ws.iter_rows(values_only=True)):
         continue
     if len(wh_sample) < 200: wh_sample.append(r)
     if not r[7]: continue
-    wh_rows.append({
+    row = {
         'brand': r[7], 'category': r[5], 'gender': r[8],
         'style': str(r[19]).strip() if r[19] else None,
         'units': r[25] or 0, 'std_cost': r[28] or 0,
-    })
+    }
+    # The full Sales_Order_Detail layout also carries the invoice side of every
+    # line (ship date, invoiced amount, extended cost). That is what finance
+    # reads as Icon's own gross margin, so keep it when it is there. A 29-column
+    # export simply has no Icon-side view.
+    if len(r) >= 32 and (not r[14] or str(r[14]).strip().upper() == 'REAL001'):
+        row.update({'ship_date': r[18], 'inv_amount': r[27] or 0,
+                    'ext_cost': r[29] or 0, 'gp': r[31] or 0})
+    wh_rows.append(row)
 check_schema('wholesale invoice', wh_header, 29,
              [(25, 'units'), (28, 'std_cost')], wh_sample)
 print(f"  {len(wh_rows):,} wholesale rows")
@@ -626,6 +635,14 @@ for name, b in brand_bucket.items():
     })
 brand_table.sort(key=lambda x: -x['received'])
 
+# Icon's own margin off the same ship file, by calendar window, beside the TRR-side
+# figure above. See iconside.py for why the two are not expected to agree.
+icon_vs_trr = build_icon_vs_trr(
+    wh_rows, brand_table,
+    lambda b: BRAND_ALIAS_POST.get(normalize_brand(b), normalize_brand(b)), TODAY)
+print(f"  Icon side: {len(icon_vs_trr['rows'])} brands, "
+      f"${icon_vs_trr['totals']['sales']:,.0f} invoiced, GM {icon_vs_trr['totals']['gm'] or 0:.1%}")
+
 brand_cadence = []
 CUTS = [30,60,90,120,150,180,210,240,270,300,330,360]
 for row in brand_table[:100]:
@@ -805,6 +822,7 @@ DATA = {
     'tier_data':tier_data,
     'cash_curve':cash_curve,
     'brand_table':brand_table,
+    'icon_vs_trr':icon_vs_trr,
     'brand_cadence':brand_cadence,
     'on_hand_aging':aging,
     'on_hand_aging_value':aging_value,

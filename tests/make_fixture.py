@@ -10,8 +10,10 @@ from pathlib import Path
 from openpyxl import Workbook
 
 # Wholesale invoice: refresh.py reads r[5] category, r[7] brand, r[8] gender,
-# r[19] style, r[25] units, r[28] std_cost.
-WH_COLS = 30
+# r[19] style, r[25] units, r[28] std_cost, and for the Icon-side margin
+# r[14] customer, r[18] ship date, r[27] invoiced amount, r[29] extended cost,
+# r[31] GP dollars.
+WH_COLS = 33
 BRANDS = [('GUCCI', 'SHOES', 'WOMENS'), ('PRADA', 'BAGS', 'WOMENS'),
           ('TOM FORD', 'RTW', 'MENS'), ('BURBERRY', 'RTW', 'WOMENS'),
           ('FENDI', 'ACCESSORIES', 'UNISEX'), ('RAYBAN', 'GLASSES', 'UNISEX')]
@@ -41,6 +43,11 @@ def build(out_dir, items=1200, seed=7):
             row = [None] * WH_COLS
             row[5], row[7], row[8], row[19] = cat, brand, gender, style
             row[25], row[28] = rng.randint(5, 40), round(rng.uniform(40, 600), 2)
+            row[14] = 'REAL001'
+            row[18] = datetime.datetime(2025 + (k % 2), 1 + (k * 2) % 12, 15)
+            row[27] = round(row[25] * row[28] * rng.uniform(0.6, 1.8), 2)
+            row[29] = round(row[25] * row[28], 2)
+            row[31] = round(row[27] - row[29], 2)
             ws.append(row)
     wb.save(out / 'data' / 'sales.xlsx')
 

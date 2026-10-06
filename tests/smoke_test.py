@@ -39,6 +39,7 @@ def data_blob(work):
 def main():
     work = Path(tempfile.mkdtemp(prefix='trr-smoke-'))
     shutil.copy(ROOT / 'refresh.py', work)
+    shutil.copy(ROOT / 'iconside.py', work)
     shutil.copy(ROOT / 'index.html', work)
     make_fixture.build(work, items=1200)
 
@@ -56,11 +57,16 @@ def main():
     check('DATA parses', d is not None)
     if d:
         for key in ('headline', 'monthly', 'cohort_data', 'brand_table',
-                    'sold_undated', 'profit_by_confidence', 'stale_breakdown'):
+                    'sold_undated', 'profit_by_confidence', 'stale_breakdown',
+                    'icon_vs_trr'):
             check(f'DATA has {key}', key in d)
         check('items counted', d['headline']['total_items'] == 1200,
               str(d['headline'].get('total_items')))
         check('deltas absent on first run', d.get('deltas') is None)
+        ivt = d.get('icon_vs_trr') or {}
+        check('icon side has brands', len(ivt.get('rows', [])) == 6, str(len(ivt.get('rows', []))))
+        check('icon side totals sum', ivt.get('totals', {}).get('sales', 0) > 0)
+        check('icon side joins TRR brand', all(r['trr_comm'] is not None for r in ivt.get('rows', [])))
     check('history.json written', (work / 'history.json').exists())
     check('schema.json written', (work / 'schema.json').exists())
     check('refresh date stamped',

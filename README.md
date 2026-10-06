@@ -113,6 +113,7 @@ output, so only `index.html` is served.
 trr-dashboard/
 ├── index.html          # the dashboard (static, self-contained)
 ├── refresh.py          # rebuilds index.html from data/*.xlsx
+├── iconside.py         # Icon-side GM from the ship file, for the Icon vs TRR tab
 ├── requirements.txt    # openpyxl
 ├── history.json        # one snapshot per refresh — drives the deltas
 ├── schema.json         # recorded column layout of both exports
@@ -125,6 +126,16 @@ trr-dashboard/
 │   └── sales.xlsx
 └── README.md
 ```
+
+## Icon vs TRR tab
+
+Finance reads the ship file as invoiced amount minus standard cost per line,
+by calendar window; the dashboard reads the same file's cost against each TRR
+item. The two margins do not agree and this tab puts them side by side, with a
+"Why" column naming the placeholder cost (flat $16.97, $1.00 lines) behind each
+brand's gap. It needs the full Sales_Order_Detail layout in `data/sales.xlsx`
+(ship date in column S, invoiced amount in AB, extended cost in AD); a 29-column
+export leaves the tab empty.
 
 ## Notes
 
