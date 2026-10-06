@@ -58,15 +58,18 @@ def main():
     if d:
         for key in ('headline', 'monthly', 'cohort_data', 'brand_table',
                     'sold_undated', 'profit_by_confidence', 'stale_breakdown',
-                    'icon_vs_trr'):
+                    'icon'):
             check(f'DATA has {key}', key in d)
         check('items counted', d['headline']['total_items'] == 1200,
               str(d['headline'].get('total_items')))
         check('deltas absent on first run', d.get('deltas') is None)
-        ivt = d.get('icon_vs_trr') or {}
-        check('icon side has brands', len(ivt.get('rows', [])) == 6, str(len(ivt.get('rows', []))))
-        check('icon side totals sum', ivt.get('totals', {}).get('sales', 0) > 0)
-        check('icon side joins TRR brand', all(r['trr_comm'] is not None for r in ivt.get('rows', [])))
+        ic = d.get('icon') or {}
+        check('icon margin computed', ic.get('sales', 0) > 0 and ic.get('gm') is not None)
+        check('every brand carries ship-file GM',
+              all(b.get('icon_gm') is not None for b in d['brand_table']),
+              str([b['brand'] for b in d['brand_table'] if b.get('icon_gm') is None]))
+        check('brand x category rows carry brand GM',
+              all('icon_gm' in r for r in d['brand_cat_gender']))
     check('history.json written', (work / 'history.json').exists())
     check('schema.json written', (work / 'schema.json').exists())
     check('refresh date stamped',

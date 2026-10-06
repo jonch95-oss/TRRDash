@@ -127,18 +127,23 @@ trr-dashboard/
 └── README.md
 ```
 
-## Icon vs TRR tab
+## Where the margin comes from
 
-Finance reads the ship file as invoiced amount minus standard cost per line,
-by calendar window; the dashboard reads the same file's cost against each TRR
-item. The two margins do not agree and this tab puts them side by side, with a
-"Why" column naming the placeholder cost (flat $16.97, $1.00 lines) behind each
-brand's gap. It needs the full Sales_Order_Detail layout in `data/sales.xlsx`
-(ship date in column S, invoiced amount in AB, extended cost in AD); a 29-column
-export leaves the tab empty.
+Every margin figure on the dashboard is Icon's own, taken from the ship file:
+invoiced amount minus standard cost on each line to customer REAL001, summed by
+brand over the prior full year plus the current year to date. That is the same
+calculation finance runs from the same file, so the two agree by construction.
+The TRR export supplies sell-through, days-to-sell, payouts and aging; it has no
+cost, so no margin is shown below brand level and the per-item cost estimate the
+dashboard used to show (SKU match, brand × category average) is no longer
+surfaced anywhere, including the CSV export.
+
+`iconside.py` does the ship-file aggregation. It needs the full
+Sales_Order_Detail layout in `data/sales.xlsx` (ship date in column S, invoiced
+amount in AB, extended cost in AD); a 29-column export leaves the margin blank.
 
 ## Notes
 
 - `refresh.py` reads two xlsx files, joins them (SKU + brand×category lookup for cost), computes all aggregates, and writes the entire DATA blob back into `index.html`. No separate JSON file is served — everything is inlined so the site works with zero backend.
-- The wholesale invoice (`data/sales.xlsx`) is the source of cost data. Items received after the invoice's cutoff fall back to brand×category averages — flagged as MED confidence in the dashboard.
+- The wholesale invoice (`data/sales.xlsx`) is the source of all margin data (see above) and of brand recognition.
 - If TRR ever changes the column layout of the inventory export, the top of `refresh.py` (the `for i, r in enumerate(ws.iter_rows(...))` block) is where to adjust column indices.

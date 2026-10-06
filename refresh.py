@@ -635,13 +635,29 @@ for name, b in brand_bucket.items():
     })
 brand_table.sort(key=lambda x: -x['received'])
 
-# Icon's own margin off the same ship file, by calendar window, beside the TRR-side
-# figure above. See iconside.py for why the two are not expected to agree.
-icon_vs_trr = build_icon_vs_trr(
+# Margin, as finance reports it: the invoice side of the same ship file, invoiced
+# amount minus standard cost per line, by brand over the prior full year plus the
+# current year to date. This is the ONLY margin the dashboard shows; the per-item
+# cost estimate above is still computed but no longer surfaced anywhere.
+_ivt = build_icon_vs_trr(
     wh_rows, brand_table,
     lambda b: BRAND_ALIAS_POST.get(normalize_brand(b), normalize_brand(b)), TODAY)
-print(f"  Icon side: {len(icon_vs_trr['rows'])} brands, "
-      f"${icon_vs_trr['totals']['sales']:,.0f} invoiced, GM {icon_vs_trr['totals']['gm'] or 0:.1%}")
+_icon_by_brand = {r['brand']: r for r in _ivt['rows']}
+for row in brand_table:
+    r = _icon_by_brand.get(row['brand'])
+    row['icon_sales'] = r['sales'] if r else None
+    row['icon_cost'] = r['cost'] if r else None
+    row['icon_gp'] = r['gp'] if r else None
+    row['icon_gm'] = r['gm'] if r else None
+_T = _ivt['totals']; _W = _ivt['windows']
+icon = {
+    'window': f"{_W['py']} + {_W['ytd']}" + (f" to {_W['ytd_through']}" if _W['ytd_through'] else ''),
+    'sales': _T['sales'], 'cost': _T['cost'], 'gp': _T['gp'], 'gm': _T['gm'],
+    'ytd_sales': _T['ytd_sales'], 'ytd_gm': _T['ytd_gm'],
+    'py_sales': _T['py_sales'], 'py_gm': _T['py_gm'],
+    'units': _T['units'],
+}
+print(f"  Icon margin (ship file): ${icon['sales']:,.0f} invoiced, GM {icon['gm'] or 0:.1%} over {icon['window']}")
 
 brand_cadence = []
 CUTS = [30,60,90,120,150,180,210,240,270,300,330,360]
@@ -788,12 +804,16 @@ stale_breakdown = sorted(
     key=lambda r: -r['cost'],
 )
 
+for _r in brand_cat_gender:
+    _b = _icon_by_brand.get(_r['brand'])
+    _r['icon_gm'] = _b['gm'] if _b else None
+
 DATA = {
     'meta': {
         'today': TODAY.strftime('%Y-%m-%d'),
         'export_file': INVENTORY.name,
         'cost_source': 'Sales_Order_Detail invoices to TRR',
-        'version':'v4',
+        'version':'v5',
         'cost_match_summary': {
             'high_confidence': cost_conf_stats['HIGH'],
             'medium_confidence': cost_conf_stats['MEDIUM'],
@@ -813,6 +833,7 @@ DATA = {
         'p75_dts':p75,'p90_dts':p90,'p95_dts':p95,
         'avg_price':avg_price,'avg_commission':avg_commission,
         'avg_cost_sold':avg_cost_sold,
+        'icon_gp':icon['gp'],'icon_gm':icon['gm'],'icon_sales':icon['sales'],
     },
     'incremental_buckets':incremental_buckets,
     'cumulative_curve':cumulative_curve,
@@ -822,7 +843,7 @@ DATA = {
     'tier_data':tier_data,
     'cash_curve':cash_curve,
     'brand_table':brand_table,
-    'icon_vs_trr':icon_vs_trr,
+    'icon':icon,
     'brand_cadence':brand_cadence,
     'on_hand_aging':aging,
     'on_hand_aging_value':aging_value,
@@ -922,16 +943,6 @@ if new_html == html:
     sys.exit("ERROR: could not find the `const DATA = {...};</script>` block in index.html. "
              "Nothing was written.")
 
-# Refresh cost-match badge in the masthead
-cm = DATA['meta']['cost_match_summary']
-hi_pct = cm['high_confidence']/cm['total']*100
-med_pct = cm['medium_confidence']/cm['total']*100
-lo_pct = cm['low_confidence']/cm['total']*100
-new_html = re.sub(
-    r'<span style="color:var\(--hi\)">\d+%</span> exact / <span style="color:var\(--med\)">\d+%</span> avg / <span style="color:var\(--lo\)">\d+%</span> portfolio',
-    f'<span style="color:var(--hi)">{hi_pct:.0f}%</span> exact / <span style="color:var(--med)">{med_pct:.0f}%</span> avg / <span style="color:var(--lo)">{lo_pct:.0f}%</span> portfolio',
-    new_html
-)
 # Refresh the "refreshed" caption
 new_html = re.sub(
     r'refreshed\s[^<]*</div>',
