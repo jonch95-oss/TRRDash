@@ -1,5 +1,7 @@
-# Data files stay local — don't commit the raw xlsx
-data/*.xlsx
+# Data files stay local. Ignore EVERYTHING in data/ except the README, so a new
+# export format (.xls, .csv, a dated copy) can never be committed by accident.
+data/*
+!data/README.md
 
 # Python
 __pycache__/

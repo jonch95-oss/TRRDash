@@ -8,6 +8,26 @@ Static analytics dashboard for The RealReal consignment operation. One HTML file
 - Vercel project: `trr-dashboard` (team `jonch95-oss-projects`)
 - Production branch: `claude/blissful-tesla-9ucnfs` — pushes to it auto-deploy in ~20s.
 
+## Cost basis
+
+Item cost is each brand's **average cost per unit from Icon's own invoices** —
+`Ext. Cost ÷ Units` across every Sales Order Detail line billed to REAL001.
+Nothing is inferred from category, price or SKU similarity.
+
+`data/sales.xls` (Sales Order Detail, *Total by Style*) and the older
+`data/sales.xlsx` (*Vertical Sizes*) are both read; drop in whichever you have
+and `refresh.py` detects the layout. No converting files.
+
+Every run prints a reconciliation against Icon's books — units, invoiced
+revenue, cost and cost per unit on both sides — and the same four figures
+appear on the dashboard's Overview. The totals will not match: Icon counts what
+it invoiced, the dashboard counts what TRR has sold. **Cost per unit is the
+number that should agree**, and the gap is reported as a percentage so drift is
+obvious.
+
+Brands Icon has never invoiced fall back to the portfolio average and are
+flagged as such on the Overview.
+
 ## Monthly refresh — the one-liner
 
 Every month when the new TRR export lands:

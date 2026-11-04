@@ -20,7 +20,8 @@ from iconside import build_icon_vs_trr
 
 ROOT = Path(__file__).parent
 INVENTORY = ROOT / 'data' / 'inventory.xlsx'
-SALES = ROOT / 'data' / 'sales.xlsx'
+SALES = next((p for p in (ROOT/'data'/'sales.xls', ROOT/'data'/'sales.xlsx') if p.exists()),
+             ROOT/'data'/'sales.xlsx')
 INDEX = ROOT / 'index.html'
 HISTORY = ROOT / 'history.json'
 SCHEMA = ROOT / 'schema.json'
@@ -40,7 +41,8 @@ MAX_REVENUE_SWING = 0.30  # revenue moving >30% in either direction
 if not INVENTORY.exists():
     sys.exit(f"ERROR: {INVENTORY} not found. Place your TRR inventory export there.")
 if not SALES.exists():
-    sys.exit(f"ERROR: {SALES} not found. Place your Icon wholesale invoice there.")
+    sys.exit(f"ERROR: no data/sales.xls or data/sales.xlsx found. "
+             f"Place the Icon Sales Order Detail export there.")
 if not INDEX.exists():
     sys.exit(f"ERROR: {INDEX} not found. This script needs the dashboard HTML to swap data into.")
 
@@ -124,35 +126,128 @@ def parse_date(s):
     return None
 
 # ============================================================
-# WHOLESALE INVOICE -> cost lookup
+# ICON SALES ORDER DETAIL -> cost basis
 # ============================================================
-print(f"Loading wholesale invoice: {SALES}")
-wb = openpyxl.load_workbook(SALES, read_only=True, data_only=True)
-ws = wb.active
-wh_rows = []
-wh_header, wh_sample = None, []
-for i, r in enumerate(ws.iter_rows(values_only=True)):
-    if i == 0:
-        wh_header = r
-        continue
-    if len(wh_sample) < 200: wh_sample.append(r)
-    if not r[7]: continue
-    row = {
-        'brand': r[7], 'category': r[5], 'gender': r[8],
-        'style': str(r[19]).strip() if r[19] else None,
-        'units': r[25] or 0, 'std_cost': r[28] or 0,
+# Two layouts are accepted.
+#
+#   "Total by Style"   (.xls, 22 cols) — one line per style per invoice month,
+#                      carrying Total Amt Inv, Total Units Inv, Std Cost and
+#                      Ext. Cost. This is Icon's own billing record and the
+#                      authoritative cost basis.
+#   "Vertical Sizes"   (.xlsx, 29+ cols) — the older per-size layout.
+#
+# Both are reduced to the same wh_rows shape so everything downstream is
+# unchanged. Style Name is the only place the full brand name appears (the
+# BRAND column is a 9-character code), so the display name is parsed off it
+# and then run through BRAND_FIXES like any other brand string.
+
+_NAME_STOP = re.compile(
+    r'\b(MENS|WOMENS|WOMEN|MEN|UNISEX|KIDS|BOYS|GIRLS|ALL|ASSORTED|ASSORT'
+    r'|SAMPLES|MERCHANDISE|STYLES|WH)\b')
+
+def _brand_from_style_names(code, counter):
+    """Most common brand-looking prefix across a code's Style Names."""
+    cands = Counter()
+    for name, n in counter.items():
+        m = _NAME_STOP.search(name)
+        pre = (name[:m.start()] if m else name).strip(' -,')
+        if len(pre) >= 3 and not pre.startswith('ASSORTED'):
+            cands[pre] += n
+    return cands.most_common(1)[0][0].title() if cands else code.title()
+
+def _gender_from_style_name(name):
+    u = (name or '').upper()
+    if 'WOMEN' in u: return 'WOMENS'
+    if 'MEN' in u:   return 'MENS'
+    return 'UNISEX'
+
+def load_total_by_style(path):
+    """Icon's Sales Order Detail, Total by Style. Returns (wh_rows, icon_totals)."""
+    import xlrd
+    sh = xlrd.open_workbook(str(path)).sheet_by_index(0)
+    COL = dict(cust=1, brand=5, style=6, name=7, amt=12, units=15,
+               cat=18, std=19, ext=20, ym=21)
+    staged, names = [], defaultdict(Counter)
+    for i in range(sh.nrows):
+        if str(sh.cell(i, COL['cust']).value).strip() != 'REAL001':
+            continue
+        try:
+            code = str(sh.cell(i, COL['brand']).value).strip()
+            name = str(sh.cell(i, COL['name']).value).strip().upper()
+            rec = dict(code=code, name=name,
+                       style=str(sh.cell(i, COL['style']).value).strip() or None,
+                       category=str(sh.cell(i, COL['cat']).value).strip() or None,
+                       amt=float(sh.cell(i, COL['amt']).value or 0),
+                       units=float(sh.cell(i, COL['units']).value or 0),
+                       std=float(sh.cell(i, COL['std']).value or 0),
+                       ext=float(sh.cell(i, COL['ext']).value or 0),
+                       ym=str(sh.cell(i, COL['ym']).value).split('.')[0])
+        except (ValueError, TypeError):
+            continue
+        if not code: continue
+        names[code][name] += 1
+        staged.append(rec)
+    display = {c: _brand_from_style_names(c, n) for c, n in names.items()}
+    rows = []
+    for r in staged:
+        # iconside works off ship_date/inv_amount/ext_cost/gp. This layout dates
+        # each line by invoice month only, so anchor it to the first of that
+        # month — enough to bucket into the YTD / prior-year windows.
+        sd = None
+        if len(r['ym']) == 6 and r['ym'].isdigit():
+            yy, mm = int(r['ym'][:4]), int(r['ym'][4:])
+            if 1 <= mm <= 12: sd = date(yy, mm, 1)
+        rows.append({
+            'brand': display[r['code']], 'category': r['category'],
+            'gender': _gender_from_style_name(r['name']), 'style': r['style'],
+            'units': r['units'], 'std_cost': r['std'],
+            'ext_cost': r['ext'], 'inv_amount': r['amt'], 'ym': r['ym'],
+            'ship_date': sd, 'gp': r['amt'] - r['ext'],
+            'brand_code': r['code'],
+        })
+    totals = {
+        'lines': len(rows),
+        'units': sum(r['units'] for r in rows),
+        'invoiced': sum(r['inv_amount'] for r in rows),
+        'ext_cost': sum(r['ext_cost'] for r in rows),
+        'months': sorted({r['ym'] for r in rows if r['ym'][:4].isdigit()}),
+        'layout': 'total_by_style',
     }
-    # The full Sales_Order_Detail layout also carries the invoice side of every
-    # line (ship date, invoiced amount, extended cost). That is what finance
-    # reads as Icon's own gross margin, so keep it when it is there. A 29-column
-    # export simply has no Icon-side view.
-    if len(r) >= 32 and (not r[14] or str(r[14]).strip().upper() == 'REAL001'):
-        row.update({'ship_date': r[18], 'inv_amount': r[27] or 0,
-                    'ext_cost': r[29] or 0, 'gp': r[31] or 0})
-    wh_rows.append(row)
-check_schema('wholesale invoice', wh_header, 29,
-             [(25, 'units'), (28, 'std_cost')], wh_sample)
-print(f"  {len(wh_rows):,} wholesale rows")
+    return rows, totals
+
+def load_vertical_sizes(path):
+    """The older 29+ column per-size layout."""
+    ws = openpyxl.load_workbook(path, read_only=True, data_only=True).active
+    rows, header, sample = [], None, []
+    for i, r in enumerate(ws.iter_rows(values_only=True)):
+        if i == 0:
+            header = r; continue
+        if len(sample) < 200: sample.append(r)
+        if not r[7]: continue
+        row = {'brand': r[7], 'category': r[5], 'gender': r[8],
+               'style': str(r[19]).strip() if r[19] else None,
+               'units': r[25] or 0, 'std_cost': r[28] or 0}
+        if len(r) >= 32 and (not r[14] or str(r[14]).strip().upper() == 'REAL001'):
+            row.update({'ship_date': r[18], 'inv_amount': r[27] or 0,
+                        'ext_cost': r[29] or 0, 'gp': r[31] or 0})
+        rows.append(row)
+    check_schema('wholesale invoice', header, 29,
+                 [(25, 'units'), (28, 'std_cost')], sample)
+    totals = {'lines': len(rows), 'units': sum(r['units'] for r in rows),
+              'invoiced': sum(r.get('inv_amount', 0) for r in rows),
+              'ext_cost': sum(r.get('ext_cost', 0) for r in rows),
+              'months': [], 'layout': 'vertical_sizes'}
+    return rows, totals
+
+print(f"Loading Icon sales order detail: {SALES}")
+if SALES.suffix.lower() == '.xls':
+    wh_rows, ICON = load_total_by_style(SALES)
+else:
+    wh_rows, ICON = load_vertical_sizes(SALES)
+print(f"  {ICON['lines']:,} invoice lines   {ICON['units']:,.0f} units   "
+      f"${ICON['invoiced']:,.0f} invoiced   ${ICON['ext_cost']:,.0f} cost")
+if ICON['months']:
+    print(f"  invoice months {ICON['months'][0]} -> {ICON['months'][-1]}")
 
 BRAND_FIXES = {
     'TOM FORD':'Tom Ford','TODS':"Tod's",'TOD\'S':"Tod's",
@@ -237,14 +332,19 @@ for r in wh_rows:
     if not b: continue
     b = BRAND_ALIAS_POST.get(b, b)
     cat, gen = r['category'], r['gender']
-    units, cost = r['units'] or 0, r['std_cost'] or 0
-    if units <= 0 or cost <= 0: continue
+    units = r['units'] or 0
+    # Prefer the invoice's own Ext. Cost so the brand averages reconcile to
+    # Icon's books exactly; fall back to std_cost x units for the older layout.
+    ext = r.get('ext_cost')
+    if not ext: ext = (r['std_cost'] or 0) * units
+    cost = (ext / units) if units else 0
+    if units <= 0 or ext <= 0: continue
     wh_by_brand_cat_gender[(b, cat, gen)]['units'] += units
-    wh_by_brand_cat_gender[(b, cat, gen)]['cost_sum'] += cost * units
+    wh_by_brand_cat_gender[(b, cat, gen)]['cost_sum'] += ext
     wh_by_brand_cat[(b, cat)]['units'] += units
-    wh_by_brand_cat[(b, cat)]['cost_sum'] += cost * units
+    wh_by_brand_cat[(b, cat)]['cost_sum'] += ext
     wh_by_brand[b]['units'] += units
-    wh_by_brand[b]['cost_sum'] += cost * units
+    wh_by_brand[b]['cost_sum'] += ext
     if r['style']:
         wh_style_lookup[r['style']] = {'brand':b, 'category':cat, 'gender':gen, 'cost':cost}
 
@@ -377,31 +477,23 @@ for i, r in enumerate(ws.iter_rows(values_only=True)):
     else:
         gender = classify_gender(name, description)
 
+    # Cost basis: the brand's average cost per unit from Icon's own invoices
+    # (Ext. Cost / Units across every line Icon billed for that brand). Asked
+    # for directly, and it is the only basis that reconciles to Icon's books.
+    #
+    # The older SKU-match / brand x category / portfolio cascade is gone. It
+    # inferred cost from the individually-styled lines and then applied that
+    # rate to assorted consignment goods, which is what produced costs above
+    # resale value (Ferragamo at $432/unit against a $236 ASP).
     cost, cost_conf = None, 'UNVERIFIED'
-    if sku_hit and sku_hit.get('cost'):
-        cost, cost_conf = sku_hit['cost'], 'HIGH'
-    else:
-        wh_cat_guess = {
-            'Sneakers':'SHOES','Boots':'SHOES','Heels':'SHOES','Flats':'SHOES','Sandals':'SHOES','Shoes':'SHOES',
-            'Bags':'BAGS','Small Leather Goods':'ACCESSORIES','Belts':'ACCESSORIES',
-            'Hats & Gloves':'ACCESSORIES','Ties & Scarves':'ACCESSORIES',
-            'Eyewear':'GLASSES','Jewelry':'JEWELRY','Tech Accessories':'ACCESSORIES',
-            'Outerwear':'RTW','Tops':'RTW','Bottoms':'RTW','Dresses':'RTW','Suits':'RTW',
-            'Swim':'RTW','Lingerie':'RTW','Activewear':'RTW',
-        }.get(fine_cat)
-        wh_gender_guess = {'Mens':'MENS','Womens':'WOMENS'}.get(gender, 'UNISEX')
-        for k in [(brand, wh_cat_guess, wh_gender_guess), (brand, wh_cat_guess, 'UNISEX')]:
-            if k in wh_by_brand_cat_gender:
-                d = wh_by_brand_cat_gender[k]
-                cost, cost_conf = d['cost_sum']/d['units'], 'MEDIUM'
-                break
-        if cost is None and (brand, wh_cat_guess) in wh_by_brand_cat:
-            d = wh_by_brand_cat[(brand, wh_cat_guess)]
-            cost, cost_conf = d['cost_sum']/d['units'], 'MEDIUM'
-        if cost is None and brand in wh_by_brand:
-            d = wh_by_brand[brand]
-            conf = 'MEDIUM' if d['units'] >= 100 else 'LOW'
-            cost, cost_conf = d['cost_sum']/d['units'], conf
+    bavg = wh_by_brand.get(brand)
+    if bavg and bavg['units']:
+        cost = bavg['cost_sum'] / bavg['units']
+        cost_conf = 'BRAND_AVG' if bavg['units'] >= 25 else 'BRAND_AVG_THIN'
+    elif sku_hit and sku_hit.get('cost'):
+        cost, cost_conf = sku_hit['cost'], 'SKU'
+    elif ICON['units']:
+        cost, cost_conf = ICON['ext_cost'] / ICON['units'], 'PORTFOLIO'
 
     cost_conf_stats[cost_conf] += 1
     items.append({
@@ -772,11 +864,11 @@ sold_undated = {
     'revenue': sum(i['price'] for i in undated),
 }
 
-# Profit split by how the cost was established. HIGH is invoiced cost; the rest
-# are estimates of decreasing specificity. The blended profit figure is only as
-# solid as the share of it sitting in HIGH.
+# Profit split by how the cost was established. BRAND_AVG is the brand's own
+# average cost per unit from Icon's invoices; the rest are progressively
+# weaker fallbacks for brands Icon has never billed.
 profit_by_confidence = {}
-for conf in ('HIGH', 'MEDIUM', 'LOW', 'UNVERIFIED'):
+for conf in ('BRAND_AVG', 'BRAND_AVG_THIN', 'SKU', 'PORTFOLIO', 'UNVERIFIED'):
     sel = [i for i in items if is_sold(i) and i['cost_conf'] == conf]
     comm = sum(i['comm_amount'] for i in sel)
     cogs = sum(i['cost'] for i in sel if i['cost'] is not None)
@@ -815,9 +907,9 @@ DATA = {
         'cost_source': 'Sales_Order_Detail invoices to TRR',
         'version':'v5',
         'cost_match_summary': {
-            'high_confidence': cost_conf_stats['HIGH'],
-            'medium_confidence': cost_conf_stats['MEDIUM'],
-            'low_confidence': cost_conf_stats['LOW'] + cost_conf_stats['UNVERIFIED'],
+            'high_confidence': cost_conf_stats['BRAND_AVG'],
+            'medium_confidence': cost_conf_stats['BRAND_AVG_THIN'] + cost_conf_stats['SKU'],
+            'low_confidence': cost_conf_stats['PORTFOLIO'] + cost_conf_stats['UNVERIFIED'],
             'total': total_items,
             'portfolio_cost': avg_cost_sold,
         },
@@ -851,6 +943,17 @@ DATA = {
     'monthly':dict(monthly),
     'brand_cat_gender':brand_cat_gender,
     'combo_trends':combo_trends,
+    'icon_recon': {
+        'icon_units': ICON['units'], 'icon_invoiced': ICON['invoiced'],
+        'icon_cost': ICON['ext_cost'],
+        'icon_cost_per_unit': (ICON['ext_cost']/ICON['units']) if ICON['units'] else None,
+        'icon_months': (ICON['months'][0] + ' - ' + ICON['months'][-1]) if ICON['months'] else None,
+        'dash_units': total_sold, 'dash_commission': total_commission,
+        'dash_cost': total_cogs_sold,
+        'dash_cost_per_unit': (total_cogs_sold/total_sold) if total_sold else None,
+        'basis': dict(cost_conf_stats),
+        'layout': ICON['layout'],
+    },
     'sold_undated':sold_undated,
     'profit_by_confidence':profit_by_confidence,
     'stale_breakdown':stale_breakdown,
@@ -957,11 +1060,21 @@ def summary():
     print(f"Sold: {total_sold:,}   Sell-through: {sell_through_overall:.1%}")
     print(f"Commission: ${total_commission:,.0f}   Profit: ${total_profit:,.0f}")
     print(f"Median DTS: {median_dts}d   On hand: {total_on_hand:,}")
-    print(f"Cost confidence: HI={cost_conf_stats['HIGH']:,} MED={cost_conf_stats['MEDIUM']:,} "
-          f"LOW={cost_conf_stats['LOW']:,} UNV={cost_conf_stats['UNVERIFIED']:,}")
-    hi = profit_by_confidence['HIGH']
-    print(f"Profit on invoiced cost only: ${hi['profit']:,.0f} across {hi['units']:,} units "
-          f"({hi['profit']/total_profit:.0%} of blended profit)" if total_profit else "")
+    print(f"Cost basis: brand avg={cost_conf_stats['BRAND_AVG']:,} "
+          f"thin={cost_conf_stats['BRAND_AVG_THIN']:,} sku={cost_conf_stats['SKU']:,} "
+          f"portfolio={cost_conf_stats['PORTFOLIO']:,} none={cost_conf_stats['UNVERIFIED']:,}")
+    print()
+    print("RECONCILIATION to Icon's invoices")
+    print(f"  Icon invoiced      {ICON['units']:>9,.0f} units   ${ICON['invoiced']:>12,.0f}   cost ${ICON['ext_cost']:>12,.0f}"
+          f"   ${ICON['ext_cost']/ICON['units'] if ICON['units'] else 0:>7,.2f}/unit")
+    print(f"  dashboard sold     {total_sold:>9,.0f} units   ${total_commission:>12,.0f}   cost ${total_cogs_sold:>12,.0f}"
+          f"   ${total_cogs_sold/total_sold if total_sold else 0:>7,.2f}/unit")
+    _gap = (total_cogs_sold/total_sold if total_sold else 0) - (ICON['ext_cost']/ICON['units'] if ICON['units'] else 0)
+    print(f"  cost/unit gap      ${_gap:>+9,.2f}   ({_gap/(ICON['ext_cost']/ICON['units'])*100 if ICON['units'] and ICON['ext_cost'] else 0:+.1f}% vs Icon)")
+    ba = profit_by_confidence['BRAND_AVG']
+    if total_profit:
+        print(f"On brands Icon has billed: ${ba['profit']:,.0f} across {ba['units']:,} units "
+              f"({ba['profit']/total_profit:.0%} of profit)")
     if sold_undated['units']:
         print(f"Sold items with no sale date: {sold_undated['units']:,} "
               f"(${sold_undated['commission']:,.0f} commission) — excluded from monthly views")

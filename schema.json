@@ -1,0 +1,15 @@
+{
+  "inventory export": [
+    "Sku",
+    "Vendor sku",
+    "Name",
+    "Price",
+    "Status",
+    "Image",
+    "Description",
+    "Commission Rate",
+    "Commission Amount",
+    "Received Date",
+    "Sale Date"
+  ]
+}
